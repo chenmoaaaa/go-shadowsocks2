@@ -1,11 +1,17 @@
 package main
 
 import (
+	//带有buf的高效io
 	"bufio"
+        //只有一个New函数，用来定制error
 	"errors"
+        //用来实现文件的读写操作
 	"io"
+        //提供一些io操作函数，如一次性读取全部文件，读取文件名，创建临时文件等
 	"io/ioutil"
+        //网络操作包
 	"net"
+        //解析用户系统相关的包
 	"os"
 	"sync"
 	"time"
@@ -14,6 +20,7 @@ import (
 )
 
 // Create a SOCKS server listening on addr and proxy to server.
+//创建一个服务器listening address和 proxy to server
 func socksLocal(addr, server string, shadow func(net.Conn) net.Conn) {
 	logf("SOCKS proxy %s <-> %s", addr, server)
 	tcpLocal(addr, server, shadow, func(c net.Conn) (socks.Addr, error) { return socks.Handshake(c) })
