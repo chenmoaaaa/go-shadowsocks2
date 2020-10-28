@@ -126,54 +126,66 @@ func main() {
 	}
         //client不为空启用client模式
 	if flags.Client != "" { // client mode
+                //取出connect地址
 		addr := flags.Client
+                //加密方式
 		cipher := flags.Cipher
+                //密码
 		password := flags.Password
 		var err error
-
+                //判断参数格式是否以ss://开头
 		if strings.HasPrefix(addr, "ss://") {
+                        //解析URL格式
 			addr, cipher, password, err = parseURL(addr)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
-
+ 
 		udpAddr := addr
-
+                //选择加密方式
 		ciph, err := core.PickCipher(cipher, key, password)
 		if err != nil {
 			log.Fatal(err)
 		}
-
+                //启用插件
 		if flags.Plugin != "" {
 			addr, err = startPlugin(flags.Plugin, flags.PluginOpts, addr, false)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
-
+                //启用通道
 		if flags.UDPTun != "" {
+                        //strings.split用分隔符将字符串分离，并不包括分隔符，返回是string类型的切片
 			for _, tun := range strings.Split(flags.UDPTun, ",") {
+                                //再次用strings.split方法切割字符串
 				p := strings.Split(tun, "=")
+                                //启用goroutine
 				go udpLocal(p[0], udpAddr, p[1], ciph.PacketConn)
 			}
 		}
-
+                //启用通道
 		if flags.TCPTun != "" {
+                        //用strings.split函数分离string，不包括分隔符
 			for _, tun := range strings.Split(flags.TCPTun, ",") {
 				p := strings.Split(tun, "=")
+                                //启用goroutine
 				go tcpTun(p[0], addr, p[1], ciph.StreamConn)
 			}
 		}
-
+                //启用socks模式
 		if flags.Socks != "" {
+                        //socks udp支持
 			socks.UDPEnabled = flags.UDPSocks
+                        //启用goroutine
 			go socksLocal(flags.Socks, addr, ciph.StreamConn)
+                        //是否启用udp socks
 			if flags.UDPSocks {
 				go udpSocksLocal(flags.Socks, udpAddr, ciph.PacketConn)
 			}
 		}
-
+                //是否启用redirect重定向
 		if flags.RedirTCP != "" {
 			go redirLocal(flags.RedirTCP, addr, ciph.StreamConn)
 		}
@@ -182,13 +194,14 @@ func main() {
 			go redir6Local(flags.RedirTCP6, addr, ciph.StreamConn)
 		}
 	}
-
+        //启用 server
 	if flags.Server != "" { // server mode
+                //提取address，cipher，password
 		addr := flags.Server
 		cipher := flags.Cipher
 		password := flags.Password
 		var err error
-
+                //判断参数是否以ss://开头
 		if strings.HasPrefix(addr, "ss://") {
 			addr, cipher, password, err = parseURL(addr)
 			if err != nil {
@@ -197,19 +210,19 @@ func main() {
 		}
 
 		udpAddr := addr
-
+                //是否启用插件
 		if flags.Plugin != "" {
 			addr, err = startPlugin(flags.Plugin, flags.PluginOpts, addr, true)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
-
+                //选择加密模式
 		ciph, err := core.PickCipher(cipher, key, password)
 		if err != nil {
 			log.Fatal(err)
 		}
-
+                //是否启用UDP or TCP支持，udp默认值是false
 		if flags.UDP {
 			go udpRemote(udpAddr, ciph.PacketConn)
 		}
@@ -217,21 +230,24 @@ func main() {
 			go tcpRemote(addr, ciph.StreamConn)
 		}
 	}
-
+        //创建一个channel，类型为os.Signal,缓冲区大学南路为1
 	sigCh := make(chan os.Signal, 1)
+        //监听系统信号
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 	killPlugin()
 }
 
 func parseURL(s string) (addr, cipher, password string, err error) {
+       //url.Parse方法将string类型的URL解析为URL类型的数据
 	u, err := url.Parse(s)
 	if err != nil {
 		return
 	}
-
+        //address为URL中的host地址
 	addr = u.Host
 	if u.User != nil {
+                //cipher加密方式为用户名称
 		cipher = u.User.Username()
 		password, _ = u.User.Password()
 	}
