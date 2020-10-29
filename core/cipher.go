@@ -1,31 +1,40 @@
 package core
 
 import (
+        //实现md5 hase算法的package，输入两个不同的值，一定返回指定长度的两个不同的值
 	"crypto/md5"
+        //只有一个new方法用来定义error值
 	"errors"
+        //net package用来实现网络操作
 	"net"
+        //实现排序算法，只要该类型实现Len(),Less(),Swap()
+        //就可以使用sort包的方法进行排序
 	"sort"
+        //高级string操作，查找，拼接，分割string
 	"strings"
 
 	"github.com/shadowsocks/go-shadowsocks2/shadowaead"
 )
-
+//interface，stream(tcp)interface，packet(udp)interface
+//stream and packet都是interface类型
 type Cipher interface {
 	StreamConnCipher
 	PacketConnCipher
 }
 
+//tcp cipher，return一个net.Conn可以Reader and writer 或者获取端口IP
 type StreamConnCipher interface {
 	StreamConn(net.Conn) net.Conn
 }
-
+//udp cipher，return一个packetConn(UDP)
 type PacketConnCipher interface {
 	PacketConn(net.PacketConn) net.PacketConn
 }
 
-// ErrCipherNotSupported occurs when a cipher is not supported (likely because of security concerns).
+// ErrCipherNotSupported occurs when a cipher is not supported (likely because of security concerns)
+//当不支持密码时报错，errors.New()函数定义的error
 var ErrCipherNotSupported = errors.New("cipher not supported")
-
+//定义const，都是string type，加密算法name
 const (
 	aeadAes128Gcm        = "AEAD_AES_128_GCM"
 	aeadAes256Gcm        = "AEAD_AES_256_GCM"
@@ -33,8 +42,12 @@ const (
 )
 
 // List of AEAD ciphers: key size in bytes and constructor
+//AEAD加密列表:函数构造和密钥大小一byte为单位
+//一个字典，键为string，值为struct type
 var aeadList = map[string]struct {
+        //key(密钥)的size(大小)
 	KeySize int
+        //函数return一个cipher和一个error
 	New     func([]byte) (shadowaead.Cipher, error)
 }{
 	aeadAes128Gcm:        {16, shadowaead.AESGCM},
