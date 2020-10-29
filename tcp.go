@@ -27,7 +27,9 @@ func socksLocal(addr, server string, shadow func(net.Conn) net.Conn) {
 }
 
 // Create a TCP tunnel from addr to target via server.
+创建一个tcp tunnel通过address 到达 target
 func tcpTun(addr, server, target string, shadow func(net.Conn) net.Conn) {
+        //解析目标地址
 	tgt := socks.ParseAddr(target)
 	if tgt == nil {
 		logf("invalid target address %q", target)
@@ -38,7 +40,9 @@ func tcpTun(addr, server, target string, shadow func(net.Conn) net.Conn) {
 }
 
 // Listen on addr and proxy to server to reach target from getAddr.
+//监听目标地址和代理服务器，从getaddr到达目标
 func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(net.Conn) (socks.Addr, error)) {
+        //监听地址
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		logf("failed to listen on %s: %v", addr, err)
@@ -46,6 +50,7 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 	}
 
 	for {
+                //等待并返回接受到的链接
 		c, err := l.Accept()
 		if err != nil {
 			logf("failed to accept: %s", err)
@@ -53,20 +58,26 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 		}
 
 		go func() {
+                        //确保能够关闭stream
 			defer c.Close()
 			tgt, err := getAddr(c)
 			if err != nil {
 
 				// UDP: keep the connection until disconnect then free the UDP socket
+                                //保持连接直到连接断开释放udp套接字
 				if err == socks.InfoUDPAssociate {
+                                        //创建一个缓冲区
 					buf := make([]byte, 1)
 					// block here
 					for {
+                                                //从数据流中读取数据填入buf
 						_, err := c.Read(buf)
+                                                //如果读取错误则重新读取
 						if err, ok := err.(net.Error); ok && err.Timeout() {
 							continue
 						}
 						logf("UDP Associate End.")
+                                                //读取成功则结束这个for%
 						return
 					}
 				}
@@ -74,18 +85,20 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 				logf("failed to get target address: %v", err)
 				return
 			}
-
+                        //发起链接
 			rc, err := net.Dial("tcp", server)
 			if err != nil {
 				logf("failed to connect to server %v: %v", server, err)
 				return
 			}
+                        //确保能够关闭链接
 			defer rc.Close()
+                        //判断是否启用tcpcork
 			if config.TCPCork {
 				rc = timedCork(rc, 10*time.Millisecond, 1280)
 			}
 			rc = shadow(rc)
-
+                        //将读取的数据写入rc中
 			if _, err = rc.Write(tgt); err != nil {
 				logf("failed to send target address: %v", err)
 				return
@@ -150,6 +163,7 @@ func tcpRemote(addr string, shadow func(net.Conn) net.Conn) {
 }
 
 // relay copies between left and right bidirectionally
+//在左和右之间双向终中继副本
 func relay(left, right net.Conn) error {
 	var err, err1 error
 	var wg sync.WaitGroup
