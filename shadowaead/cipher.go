@@ -1,11 +1,18 @@
 package shadowaead
 
 import (
+        //实现了aes加密算法，NewCipher()return block interface
+        //block中encrypt and decrypt 负责加密解密，将[]byte解密后输入任意类型中
 	"crypto/aes"
+        //实现了标准加密模块
 	"crypto/cipher"
+        //实现sha1加密算法的package
 	"crypto/sha1"
+        //只有一个New()方法来定义error
 	"errors"
+        //读写流控制
 	"io"
+        //实现各个数据类型之间的转换
 	"strconv"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -13,15 +20,21 @@ import (
 )
 
 // ErrRepeatedSalt means detected a reused salt
+//salt随机值，检测到重复的随机值
 var ErrRepeatedSalt = errors.New("repeated salt detected")
-
+//cipher interface
 type Cipher interface {
+        //key密钥大小
 	KeySize() int
+        //salt随机值大小
 	SaltSize() int
+        //encrypt加密 decrypt解密，输入一个salt随机值
+        //return一个cipher.AEAD interface类型的数据包含
+        //加密解密函数seal open
 	Encrypter(salt []byte) (cipher.AEAD, error)
 	Decrypter(salt []byte) (cipher.AEAD, error)
 }
-
+//定义error值
 type KeySizeError int
 
 func (e KeySizeError) Error() string {
