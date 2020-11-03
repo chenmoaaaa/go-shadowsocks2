@@ -1,18 +1,25 @@
 package shadowaead
 
 import (
+        //string可以表示为[]byte，因此bytes包下的函数同strings包一样
 	"bytes"
+        //实现了标准加密解密的包
 	"crypto/cipher"
+        //用于加密解密更安全的随机数生成器
 	"crypto/rand"
+        //io package用于Reader Writer
 	"io"
+        //用于网络操作
 	"net"
 
 	"github.com/shadowsocks/go-shadowsocks2/internal"
 )
 
 // payloadSizeMask is the maximum size of payload in bytes.
+//有效载荷大小是有效载荷大小的最大值
 const payloadSizeMask = 0x3FFF // 16*1024 - 1
-
+//io.Writer cipher.AEAD是interface
+//nonce buf是byte[]类型可以视做string
 type writer struct {
 	io.Writer
 	cipher.AEAD
@@ -21,8 +28,10 @@ type writer struct {
 }
 
 // NewWriter wraps an io.Writer with AEAD encryption.
+//包装一个新的Writer与AEAD
+//参数为 io.Writer cipher.AEAD return一个io.Writer
 func NewWriter(w io.Writer, aead cipher.AEAD) io.Writer { return newWriter(w, aead) }
-
+//return一个指针类型
 func newWriter(w io.Writer, aead cipher.AEAD) *writer {
 	return &writer{
 		Writer: w,
@@ -33,7 +42,11 @@ func newWriter(w io.Writer, aead cipher.AEAD) *writer {
 }
 
 // Write encrypts b and writes to the embedded io.Writer.
+//写入加密与写入到嵌入的io.Writer
 func (w *writer) Write(b []byte) (int, error) {
+        //NewBuffer()将[]byte包装成bytes package下的
+        //Buffer对象实现了io包下的Reader Writer interface
+        //ReaderFrom()从bytes.NewBuffer()中读取数据，再由Writer写入，n是写入的字节数
 	n, err := w.ReadFrom(bytes.NewBuffer(b))
 	return int(n), err
 }
@@ -41,16 +54,22 @@ func (w *writer) Write(b []byte) (int, error) {
 // ReadFrom reads from the given io.Reader until EOF or error, encrypts and
 // writes to the embedded io.Writer. Returns number of bytes read from r and
 // any error encountered.
+//ReadFrom读取给定的io。读取器直到EOF或错误，
+//加密并写入嵌入的io.Writer。返回从r读取的字节数和遇到的任何错误。
 func (w *writer) ReadFrom(r io.Reader) (n int64, err error) {
 	for {
 		buf := w.buf
 		payloadBuf := buf[2+w.Overhead() : 2+w.Overhead()+payloadSizeMask]
+                //从r中读取数据在写入payloadBuf，return读取到的字节数和错误
 		nr, er := r.Read(payloadBuf)
-
+                //如果读取到的字节数大于0，说明读取成功
 		if nr > 0 {
+                        //n=nr+nr
 			n += int64(nr)
+                        //从buf中提取指定长度的数据
 			buf = buf[:2+w.Overhead()+nr+w.Overhead()]
 			payloadBuf = payloadBuf[:nr]
+                        //buf[0]==byte(nr位运算右移8位)，byte==byte(nr)
 			buf[0], buf[1] = byte(nr>>8), byte(nr) // big-endian payload size
 			w.Seal(buf[:0], w.nonce, buf[:2], nil)
 			increment(w.nonce)
