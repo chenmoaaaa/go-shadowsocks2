@@ -70,10 +70,11 @@ func (w *writer) ReadFrom(r io.Reader) (n int64, err error) {
 			buf = buf[:2+w.Overhead()+nr+w.Overhead()]
 			payloadBuf = payloadBuf[:nr]
                         //buf[0]==byte(nr位运算右移8位)，byte==byte(nr)
-			buf[0], buf[1] = byte(nr>>8), byte(nr) // big-endian payload size
+			buf[0], buf[1] = byte(nr>>8), byte(nr) // big-endian payload size//大端模式的有效载荷
+                        //将数据填入buf中
 			w.Seal(buf[:0], w.nonce, buf[:2], nil)
 			increment(w.nonce)
-
+                        //将数据填入payloadBuf中
 			w.Seal(payloadBuf[:0], w.nonce, payloadBuf, nil)
 			increment(w.nonce)
 
@@ -94,45 +95,55 @@ func (w *writer) ReadFrom(r io.Reader) (n int64, err error) {
 
 	return n, err
 }
-
+//reader类型包括io.Reader cipher.AEAD interface
 type reader struct {
 	io.Reader
 	cipher.AEAD
+        //只用一次的随机值
 	nonce    []byte
+        //缓冲区
 	buf      []byte
+        //leftover剩余的
 	leftover []byte
 }
 
 // NewReader wraps an io.Reader with AEAD decryption.
+//NewReader包装 io.Reader 包括Reader和AEDA decrypt
 func NewReader(r io.Reader, aead cipher.AEAD) io.Reader { return newReader(r, aead) }
 
 func newReader(r io.Reader, aead cipher.AEAD) *reader {
 	return &reader{
 		Reader: r,
 		AEAD:   aead,
+                //buf的大小为额外开销加上工作沉余空间
 		buf:    make([]byte, payloadSizeMask+aead.Overhead()),
+                //nonce的大小
 		nonce:  make([]byte, aead.NonceSize()),
 	}
 }
 
-// read and decrypt a record into the internal buffer. Return decrypted payload length and any error encountered.
+// read and decrypt a record into the internal buffer. Return decrypted payload length and any error encountered
+//将内容解密并读取缓冲区中，并return读取到的字节长度和遇到的错误.
 func (r *reader) read() (int, error) {
 	// decrypt payload size
+        //解密的有效载荷大小
 	buf := r.buf[:2+r.Overhead()]
+        //将从r中读取内容填入buf中
 	_, err := io.ReadFull(r.Reader, buf)
 	if err != nil {
 		return 0, err
 	}
-
+        //将内容解密并填入buf中
 	_, err = r.Open(buf[:0], r.nonce, buf, nil)
 	increment(r.nonce)
 	if err != nil {
 		return 0, err
 	}
-
+        //设置大小
 	size := (int(buf[0])<<8 + int(buf[1])) & payloadSizeMask
 
 	// decrypt payload
+        //解密有效载荷
 	buf = r.buf[:size+r.Overhead()]
 	_, err = io.ReadFull(r.Reader, buf)
 	if err != nil {
@@ -149,17 +160,21 @@ func (r *reader) read() (int, error) {
 }
 
 // Read reads from the embedded io.Reader, decrypts and writes to b.
+//从嵌入式io读取，解密并写入b在
 func (r *reader) Read(b []byte) (int, error) {
 	// copy decrypted bytes (if any) from previous record first
+        //从以前的记录在哪里复制解密的字节(如果有的话)
 	if len(r.leftover) > 0 {
+               //copy()将r.leftover写入b中
 		n := copy(b, r.leftover)
 		r.leftover = r.leftover[n:]
 		return n, nil
 	}
-
+        //得到能够有效读取的字节数n
 	n, err := r.read()
+        //复制r.buf中的数据到b中
 	m := copy(b, r.buf[:n])
-	if m < n { // insufficient len(b), keep leftover for next read
+	if m < n { // insufficient len(b), keep leftover for next read//当b的长度不够是留下一部分
 		r.leftover = r.buf[m:n]
 	}
 	return m, err
@@ -168,8 +183,10 @@ func (r *reader) Read(b []byte) (int, error) {
 // WriteTo reads from the embedded io.Reader, decrypts and writes to w until
 // there's no more data to write or when an error occurs. Return number of
 // bytes written to w and any error encountered.
+//读写从嵌入式io，返回成功读写的次数
 func (r *reader) WriteTo(w io.Writer) (n int64, err error) {
 	// write decrypted bytes left over from previous record
+        //写入从前一个记录留下来的解密字节的
 	for len(r.leftover) > 0 {
 		nw, ew := w.Write(r.leftover)
 		r.leftover = r.leftover[nw:]
@@ -180,8 +197,10 @@ func (r *reader) WriteTo(w io.Writer) (n int64, err error) {
 	}
 
 	for {
+               //返回正确读取到的字数
 		nr, er := r.read()
 		if nr > 0 {
+                        //将r.buf中的写入
 			nw, ew := w.Write(r.buf[:nr])
 			n += int64(nw)
 
@@ -203,6 +222,7 @@ func (r *reader) WriteTo(w io.Writer) (n int64, err error) {
 }
 
 // increment little-endian encoded unsigned integer b. Wrap around on overflow.
+//增量小端编码的无符号整数b.溢出时绕圈。
 func increment(b []byte) {
 	for i := range b {
 		b[i]++
@@ -211,7 +231,7 @@ func increment(b []byte) {
 		}
 	}
 }
-
+//tcp网络结构
 type streamConn struct {
 	net.Conn
 	Cipher
@@ -220,19 +240,24 @@ type streamConn struct {
 }
 
 func (c *streamConn) initReader() error {
+       //定义随机值的大小
 	salt := make([]byte, c.SaltSize())
+       //将从网络中读取的数据存入随机值中
 	if _, err := io.ReadFull(c.Conn, salt); err != nil {
 		return err
 	}
+        //测试随机值
 	if internal.TestSalt(salt) {
 		return ErrRepeatedSalt
 	}
+       //获取加密方式
 	aead, err := c.Decrypter(salt)
 	if err != nil {
 		return err
 	}
+        //增加随机值
 	internal.AddSalt(salt)
-
+        //获取一个指针类型的reader数据，包括io.Reader cipher.AEAD interface, buf leftover byte[]
 	c.r = newReader(c.Conn, aead)
 	return nil
 }
