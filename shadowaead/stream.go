@@ -64,7 +64,7 @@ func (w *writer) ReadFrom(r io.Reader) (n int64, err error) {
 		nr, er := r.Read(payloadBuf)
                 //如果读取到的字节数大于0，说明读取成功
 		if nr > 0 {
-                        //n=nr+nr
+                        //n=nr+n
 			n += int64(nr)
                         //从buf中提取指定长度的数据
 			buf = buf[:2+w.Overhead()+nr+w.Overhead()]
